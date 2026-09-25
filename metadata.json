@@ -1,0 +1,8 @@
+{
+  "name": "WSPOS",
+  "description": "Point of Sale yang cepat dan sederhana untuk Warung Senja Terang Bulan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
