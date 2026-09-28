@@ -9,6 +9,7 @@ import {
   Store,
 } from 'lucide-react';
 import { User } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export type TabType =
   | 'dashboard'
@@ -92,6 +93,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+      </div>
+
+      {/* PWA / APK Install Button */}
+      <div className="px-3 py-2">
+        <PWAInstallButton variant="sidebar" />
       </div>
 
       {/* User Profile & Logout Bottom */}

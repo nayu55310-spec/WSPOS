@@ -120,7 +120,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 ];
 
 export const INITIAL_PRINTER_SETTINGS: PrinterSettings = {
-  printerName: 'POS-80C',
+  printerName: 'POS-5802DD (Bluetooth Thermal)',
   connectionType: 'Bluetooth',
   paperWidth: '58 mm',
   orientation: 'Portrait',
@@ -129,8 +129,11 @@ export const INITIAL_PRINTER_SETTINGS: PrinterSettings = {
   autoPrint: true,
   autoCut: true,
   beepAfterPrint: true,
-  ipAddress: '192.168.1.100',
-  port: '9100',
+  bluetoothDeviceName: 'POS-5802DD (Bluetooth Thermal)',
+  bluetoothDeviceId: 'BT-POS-58-7A4C',
+  bluetoothStatus: 'connected',
+  ipAddress: '',
+  port: '',
 };
 
 export const INITIAL_RECEIPT_TEMPLATE: ReceiptTemplate = {
@@ -142,6 +145,8 @@ export const INITIAL_RECEIPT_TEMPLATE: ReceiptTemplate = {
   showCashier: true,
   showTime: true,
   showQrCode: true,
+  footerLogo: '',
+  showFooterLogo: true,
 };
 
 export const EMPTY_RECEIPT_TEMPLATE: ReceiptTemplate = {
@@ -153,6 +158,8 @@ export const EMPTY_RECEIPT_TEMPLATE: ReceiptTemplate = {
   showCashier: true,
   showTime: true,
   showQrCode: false,
+  footerLogo: '',
+  showFooterLogo: false,
 };
 
 export const INITIAL_PAYMENT_SETTINGS: PaymentSettings = {

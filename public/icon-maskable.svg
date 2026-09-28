@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradM" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#db2777"/>
+    </linearGradient>
+    <linearGradient id="goldMoonM" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full bleed background for maskable -->
+  <rect width="512" height="512" fill="url(#bgGradM)"/>
+
+  <!-- Centered content within safe 80% circle (diameter ~400px, padding ~56px) -->
+  <g transform="translate(86, 68) scale(0.85)">
+    <!-- Crescent Moon -->
+    <path d="M 270 40 A 90 90 0 1 0 330 170 A 75 75 0 0 1 270 40 Z" fill="url(#goldMoonM)"/>
+    <circle cx="210" cy="50" r="8" fill="#ffffff" opacity="0.9"/>
+
+    <!-- Modern POS Terminal Base -->
+    <rect x="52" y="140" width="280" height="170" rx="24" fill="#ffffff"/>
+    <rect x="72" y="160" width="240" height="110" rx="14" fill="#1e293b"/>
+    <rect x="88" y="176" width="90" height="12" rx="6" fill="#38bdf8"/>
+    <circle cx="292" cy="182" r="5" fill="#22c55e"/>
+    
+    <rect x="88" y="200" width="130" height="14" rx="4" fill="#f8fafc"/>
+    <rect x="88" y="222" width="70" height="10" rx="3" fill="#94a3b8"/>
+    <rect x="236" y="218" width="56" height="22" rx="6" fill="#f97316"/>
+
+    <path d="M 122 310 L 142 356 L 242 356 L 262 310 Z" fill="#e2e8f0"/>
+    <rect x="102" y="356" width="180" height="26" rx="10" fill="#cbd5e1"/>
+    
+    <rect x="152" y="332" width="80" height="6" rx="3" fill="#64748b"/>
+    
+    <text x="192" y="440" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" letter-spacing="4" fill="#ffffff">
+      WSPOS
+    </text>
+  </g>
+</svg>

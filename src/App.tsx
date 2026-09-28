@@ -30,6 +30,7 @@ import { SettingsView } from './components/SettingsView';
 import { OpenCashierModal } from './components/OpenCashierModal';
 import { CloseCashierModal } from './components/CloseCashierModal';
 import { ReceiptModal } from './components/ReceiptModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 export default function App() {
   // State from LocalStorage
@@ -361,6 +362,9 @@ export default function App() {
         printerSettings={printerSettings}
         onClose={() => setSelectedReceiptTx(null)}
       />
+
+      {/* Offline Status Toast */}
+      <OfflineIndicator />
     </div>
   );
 }

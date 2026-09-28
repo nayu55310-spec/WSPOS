@@ -118,7 +118,7 @@ export interface ShiftSummaryReport {
 
 export interface PrinterSettings {
   printerName: string;
-  connectionType: 'Bluetooth' | 'USB' | 'Network/LAN';
+  connectionType: 'Bluetooth';
   paperWidth: '58 mm' | '80 mm';
   orientation: 'Portrait' | 'Landscape';
   copies: number;
@@ -126,8 +126,11 @@ export interface PrinterSettings {
   autoPrint: boolean;
   autoCut: boolean;
   beepAfterPrint: boolean;
-  ipAddress: string;
-  port: string;
+  bluetoothDeviceId?: string;
+  bluetoothDeviceName?: string;
+  bluetoothStatus?: 'connected' | 'disconnected' | 'connecting';
+  ipAddress?: string;
+  port?: string;
 }
 
 export interface ReceiptTemplate {
@@ -139,4 +142,6 @@ export interface ReceiptTemplate {
   showCashier: boolean;
   showTime: boolean;
   showQrCode: boolean;
+  footerLogo?: string;
+  showFooterLogo?: boolean;
 }

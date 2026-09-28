@@ -14,6 +14,8 @@ import {
   Receipt,
   ChevronDown,
   ChevronUp,
+  Bluetooth,
+  Check,
 } from 'lucide-react';
 import {
   CashDrawerSession,
@@ -23,6 +25,7 @@ import {
   ShiftSummaryReport,
 } from '../types';
 import { formatRupiah, formatDateIndo } from '../utils/format';
+import { useBluetoothPrinter } from '../hooks/useBluetoothPrinter';
 
 interface CloseCashierModalProps {
   isOpen: boolean;
@@ -41,10 +44,34 @@ export const CloseCashierModal: React.FC<CloseCashierModalProps> = ({
   cashDrawer,
   transactions,
   template,
+  printerSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'transactions' | 'receipt'>('summary');
   const [actualCashInput, setActualCashInput] = useState<string>('');
   const [isTxListExpanded, setIsTxListExpanded] = useState(false);
+  const [btFeedback, setBtFeedback] = useState<string | null>(null);
+
+  const {
+    status: btStatus,
+    deviceInfo: btDeviceInfo,
+    isPrinting,
+    connectBluetooth,
+    printShiftReport,
+  } = useBluetoothPrinter();
+
+  const activePrinterSettings: PrinterSettings = printerSettings || {
+    printerName: 'Thermal Bluetooth POS',
+    connectionType: 'Bluetooth',
+    paperWidth: '58 mm',
+    orientation: 'Portrait',
+    copies: 1,
+    margin: '0 mm',
+    autoPrint: true,
+    autoCut: true,
+    beepAfterPrint: true,
+    ipAddress: '',
+    port: '',
+  };
 
   // Filter transactions created during this active cashier session
   const sessionTransactions = useMemo(() => {
@@ -156,29 +183,49 @@ export const CloseCashierModal: React.FC<CloseCashierModalProps> = ({
 
   if (!isOpen) return null;
 
+  const generateShiftReportData = (): ShiftSummaryReport => ({
+    openedAt: cashDrawer.openedAt || new Date().toISOString(),
+    closedAt: new Date().toISOString(),
+    openedBy: cashDrawer.openedBy || 'Kasir',
+    initialCash,
+    totalTransactions: sessionTransactions.length,
+    totalItemsSold,
+    cashSales,
+    qrisSales,
+    transferSales,
+    otherSales,
+    totalSales,
+    expectedCashInDrawer,
+    actualCashInDrawer,
+    cashDifference,
+    transactions: sessionTransactions,
+  });
+
+  const handlePrintBluetooth = async () => {
+    setBtFeedback(null);
+    if (btStatus !== 'connected') {
+      const ok = await connectBluetooth();
+      if (!ok) {
+        setBtFeedback('Printer Bluetooth belum tersambung.');
+        return;
+      }
+    }
+    const report = generateShiftReportData();
+    const success = await printShiftReport(report, template, activePrinterSettings);
+    if (success) {
+      setBtFeedback('Struk rekap shift berhasil dicetak via Bluetooth!');
+      setTimeout(() => setBtFeedback(null), 4000);
+    } else {
+      setBtFeedback('Gagal mencetak. Coba cek kertas atau gunakan cetak browser.');
+    }
+  };
+
   const handlePrintReport = () => {
     window.print();
   };
 
   const handleFinalClose = () => {
-    const report: ShiftSummaryReport = {
-      openedAt: cashDrawer.openedAt || new Date().toISOString(),
-      closedAt: new Date().toISOString(),
-      openedBy: cashDrawer.openedBy || 'Kasir',
-      initialCash,
-      totalTransactions: sessionTransactions.length,
-      totalItemsSold,
-      cashSales,
-      qrisSales,
-      transferSales,
-      otherSales,
-      totalSales,
-      expectedCashInDrawer,
-      actualCashInDrawer,
-      cashDifference,
-      transactions: sessionTransactions,
-    };
-
+    const report = generateShiftReportData();
     onConfirmClose(report);
   };
 
@@ -611,17 +658,42 @@ export const CloseCashierModal: React.FC<CloseCashierModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-zinc-800 bg-[#18181d] flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={handlePrintReport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-[#222228] border border-zinc-700 hover:border-zinc-600 transition-colors cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-[#f59e0b]" />
-            Cetak Struk Rekap Shift
-          </button>
+        <div className="px-6 py-4 border-t border-zinc-800 bg-[#18181d] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrintBluetooth}
+              disabled={isPrinting}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-black bg-[#f59e0b] hover:bg-[#e09107] transition-all shadow-md active:scale-95 cursor-pointer"
+            >
+              <Bluetooth className="w-4 h-4" />
+              <span>
+                {isPrinting
+                  ? 'Mencetak...'
+                  : btStatus === 'connected'
+                  ? 'Cetak Rekap via Bluetooth'
+                  : 'Hubungkan & Cetak Bluetooth'}
+              </span>
+            </button>
 
-          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handlePrintReport}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-[#222228] border border-zinc-700 hover:border-zinc-600 transition-colors cursor-pointer"
+              title="Cetak lewat dialog cetak browser atau simpan PDF"
+            >
+              <Printer className="w-4 h-4 text-zinc-400" />
+              <span className="hidden sm:inline">Dialog Browser</span>
+            </button>
+
+            {btFeedback && (
+              <span className="text-[11px] font-semibold text-emerald-400 ml-1">
+                {btFeedback}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5 justify-end">
             <button
               type="button"
               onClick={onClose}
@@ -633,7 +705,7 @@ export const CloseCashierModal: React.FC<CloseCashierModalProps> = ({
             <button
               type="button"
               onClick={handleFinalClose}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-[#f59e0b] hover:bg-[#e09107] transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-emerald-500 hover:bg-emerald-400 transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
             >
               <CheckCircle2 className="w-4 h-4" />
               Konfirmasi & Tutup Kasir

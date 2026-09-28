@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#121214"/>
+  <rect x="32" y="32" width="448" height="448" rx="88" fill="#1a1a1f" stroke="#f59e0b" stroke-width="8" stroke-opacity="0.25"/>
+  <rect x="80" y="80" width="352" height="352" rx="64" fill="url(#amber-grad)"/>
+  
+  <!-- Storefront / POS Icon in dark slate -->
+  <g fill="#121214">
+    <!-- Roof / Awning -->
+    <path d="M144 192 L256 128 L368 192 L368 220 L144 220 Z"/>
+    <path d="M144 220 C144 235 156 244 172 244 C188 244 200 235 200 220 C200 235 212 244 228 244 C244 244 256 235 256 220 C256 235 268 244 284 244 C300 244 312 235 312 220 C312 235 324 244 340 244 C356 244 368 235 368 220 L368 214 L144 214 Z"/>
+    
+    <!-- Columns and Base -->
+    <rect x="164" y="244" width="28" height="116" rx="4"/>
+    <rect x="320" y="244" width="28" height="116" rx="4"/>
+    <rect x="144" y="360" width="224" height="24" rx="6"/>
+    
+    <!-- Center Register / Door -->
+    <rect x="224" y="272" width="64" height="88" rx="8"/>
+    <rect x="240" y="288" width="32" height="24" rx="4" fill="#fbbf24"/>
+  </g>
+
+  <!-- Typography -->
+  <text x="256" y="440" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="34" text-anchor="middle" fill="#f59e0b" letter-spacing="4">WSPOS</text>
+
+  <defs>
+    <linearGradient id="amber-grad" x1="80" y1="80" x2="432" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+</svg>

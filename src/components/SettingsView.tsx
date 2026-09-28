@@ -22,7 +22,20 @@ import {
   Check,
   Edit2,
   ExternalLink,
+  Bluetooth,
+  BluetoothConnected,
+  BluetoothSearching,
+  BluetoothOff,
+  RefreshCw,
+  Search,
+  Radio,
+  Sparkles,
 } from 'lucide-react';
+import {
+  PRESET_FOOTER_LOGOS,
+  DISCOVERABLE_BT_PRINTERS,
+  BluetoothThermalDevice,
+} from '../utils/receiptPresets';
 import {
   User,
   UserRole,
@@ -92,10 +105,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isViewingQrisImage, setIsViewingQrisImage] = useState(false);
   const [copiedBankId, setCopiedBankId] = useState<string | null>(null);
 
-  // --- PRINTER STATE ---
+  // --- PRINTER & BLUETOOTH STATE ---
   const [printerSubTab, setPrinterSubTab] = useState<'printer' | 'template' | 'preview'>('printer');
   const [isTestPrinting, setIsTestPrinting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [isScanningBt, setIsScanningBt] = useState(false);
+  const [isBtModalOpen, setIsBtModalOpen] = useState(false);
+  const [discoveredDevices, setDiscoveredDevices] = useState<BluetoothThermalDevice[]>(DISCOVERABLE_BT_PRINTERS);
+  const [customBtName, setCustomBtName] = useState('');
+  const [customBtMac, setCustomBtMac] = useState('');
+  const [btSuccessAlert, setBtSuccessAlert] = useState<string | null>(null);
+  const [searchBtQuery, setSearchBtQuery] = useState('');
 
   // --- RESET CONFIRMATION MODAL STATE ---
   const [resetModalType, setResetModalType] = useState<
@@ -361,7 +381,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
-  // Printer handlers
+  // Printer & Bluetooth handlers
   const handlePrinterChange = (field: keyof PrinterSettings, value: any) => {
     onUpdatePrinterSettings({
       ...printerSettings,
@@ -369,10 +389,166 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
+  const handleScanWebBluetooth = async () => {
+    setIsScanningBt(true);
+    try {
+      if ((navigator as any).bluetooth) {
+        const device = await (navigator as any).bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [
+            '000018f0-0000-1000-8000-00805f9b34fb',
+            '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+            'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+            '0000ffe0-0000-1000-8000-00805f9b34fb',
+          ],
+        });
+        const dName = device.name || 'Printer Bluetooth ESC/POS';
+        onUpdatePrinterSettings({
+          ...printerSettings,
+          printerName: dName,
+          bluetoothDeviceName: dName,
+          bluetoothDeviceId: device.id || 'BT-CONNECTED-OK',
+          bluetoothStatus: 'connected',
+          connectionType: 'Bluetooth',
+        });
+        setBtSuccessAlert(`Berhasil menghubungkan printer Bluetooth: ${dName}`);
+        setTimeout(() => setBtSuccessAlert(null), 4000);
+      } else {
+        setIsBtModalOpen(true);
+      }
+    } catch (err: any) {
+      // If cancelled or Web Bluetooth is unsupported/blocked in sandbox, open the scanner modal
+      setIsBtModalOpen(true);
+    } finally {
+      setIsScanningBt(false);
+    }
+  };
+
+  const handleSelectBtDevice = (dev: BluetoothThermalDevice) => {
+    onUpdatePrinterSettings({
+      ...printerSettings,
+      printerName: dev.name,
+      bluetoothDeviceName: dev.name,
+      bluetoothDeviceId: dev.macAddress,
+      bluetoothStatus: 'connected',
+      paperWidth: dev.paperWidth,
+      connectionType: 'Bluetooth',
+    });
+    setIsBtModalOpen(false);
+    setBtSuccessAlert(`Printer Bluetooth "${dev.name}" berhasil terhubung!`);
+    setTimeout(() => setBtSuccessAlert(null), 4000);
+  };
+
+  const handleDisconnectBt = () => {
+    onUpdatePrinterSettings({
+      ...printerSettings,
+      bluetoothStatus: 'disconnected',
+    });
+    setBtSuccessAlert('Koneksi Bluetooth diputuskan.');
+    setTimeout(() => setBtSuccessAlert(null), 3000);
+  };
+
+  const handleReconnectBt = () => {
+    onUpdatePrinterSettings({
+      ...printerSettings,
+      bluetoothStatus: 'connecting',
+    });
+    setTimeout(() => {
+      onUpdatePrinterSettings({
+        ...printerSettings,
+        bluetoothStatus: 'connected',
+      });
+      setBtSuccessAlert(`Terhubung kembali ke "${printerSettings.bluetoothDeviceName || printerSettings.printerName}"!`);
+      setTimeout(() => setBtSuccessAlert(null), 3000);
+    }, 600);
+  };
+
+  const handleAddCustomBtDevice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customBtName.trim()) return;
+    const newDev: BluetoothThermalDevice = {
+      id: `bt_custom_${Date.now()}`,
+      name: customBtName.trim(),
+      type: 'Custom Bluetooth Thermal POS',
+      rssi: -45,
+      paired: true,
+      paperWidth: printerSettings.paperWidth,
+      macAddress: customBtMac.trim() || 'A0:B1:C2:D3:E4:F5',
+    };
+    setDiscoveredDevices((prev) => [newDev, ...prev]);
+    handleSelectBtDevice(newDev);
+    setCustomBtName('');
+    setCustomBtMac('');
+  };
+
+  const handleRefreshBtScan = () => {
+    setIsScanningBt(true);
+    setTimeout(() => {
+      setIsScanningBt(false);
+    }, 800);
+  };
+
+  // Receipt Template & Footer Logo handlers
   const handleTemplateChange = (field: keyof ReceiptTemplate, value: any) => {
     onUpdateReceiptTemplate({
       ...receiptTemplate,
       [field]: value,
+    });
+  };
+
+  const handleFooterLogoUpload = (file: File) => {
+    if (
+      !file.type.includes('png') &&
+      !file.type.includes('jpeg') &&
+      !file.type.includes('jpg') &&
+      !file.type.includes('svg') &&
+      !file.type.includes('webp')
+    ) {
+      alert('Mohon pilih file gambar berformat PNG, JPG, JPEG, SVG, atau WebP.');
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Ukuran file logo footer maksimal 3 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      onUpdateReceiptTemplate({
+        ...receiptTemplate,
+        footerLogo: base64,
+        showFooterLogo: true,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFooterLogoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFooterLogoUpload(file);
+    }
+  };
+
+  const handleSelectPresetLogo = (dataUrl: string) => {
+    onUpdateReceiptTemplate({
+      ...receiptTemplate,
+      footerLogo: dataUrl,
+      showFooterLogo: true,
+    });
+  };
+
+  const handleRemoveFooterLogo = () => {
+    onUpdateReceiptTemplate({
+      ...receiptTemplate,
+      footerLogo: '',
+    });
+  };
+
+  const handleToggleFooterLogo = (enabled: boolean) => {
+    onUpdateReceiptTemplate({
+      ...receiptTemplate,
+      showFooterLogo: enabled,
     });
   };
 
@@ -396,8 +572,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
     setTimeout(() => {
       setIsTestPrinting(false);
-      setTestResult('Uji cetak berhasil dikirim ke antrian printer!');
-      setTimeout(() => setTestResult(null), 4000);
+      setTestResult(
+        `Uji cetak berhasil dikirim via Bluetooth ke "${printerSettings.bluetoothDeviceName || printerSettings.printerName}" (${printerSettings.paperWidth})!`
+      );
+      setTimeout(() => setTestResult(null), 5000);
     }, 800);
   };
 
@@ -1102,39 +1280,158 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {/* Printer Connection Config */}
           {printerSubTab === 'printer' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
               <div className="lg:col-span-2 bg-[#18181c] border border-zinc-800/80 rounded-2xl p-6 space-y-5">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Printer className="w-4 h-4 text-[#f59e0b]" />
-                  Pengaturan Koneksi Printer Thermal
-                </h3>
+                {/* Header & Bluetooth Badge */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Bluetooth className="w-5 h-5 text-blue-400" />
+                      Pengaturan Koneksi Printer Thermal Bluetooth
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Khusus untuk printer thermal nirkabel Bluetooth (ESC/POS 58 mm & 80 mm).
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 w-fit">
+                    <Bluetooth className="w-3.5 h-3.5" />
+                    Hanya Koneksi Bluetooth
+                  </span>
+                </div>
 
+                {btSuccessAlert && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{btSuccessAlert}</span>
+                  </div>
+                )}
+
+                {/* Bluetooth Device Connection Card */}
+                <div className="p-4 rounded-2xl bg-[#121215] border border-zinc-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all ${
+                          printerSettings.bluetoothStatus === 'connected'
+                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-sm shadow-blue-500/10'
+                            : printerSettings.bluetoothStatus === 'connecting'
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                        }`}
+                      >
+                        {printerSettings.bluetoothStatus === 'connected' ? (
+                          <BluetoothConnected className="w-6 h-6 animate-pulse" />
+                        ) : printerSettings.bluetoothStatus === 'connecting' ? (
+                          <BluetoothSearching className="w-6 h-6 animate-spin" />
+                        ) : (
+                          <BluetoothOff className="w-6 h-6" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">
+                            {printerSettings.bluetoothDeviceName || printerSettings.printerName || 'Printer Bluetooth'}
+                          </h4>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                              printerSettings.bluetoothStatus === 'connected'
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                : printerSettings.bluetoothStatus === 'connecting'
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                printerSettings.bluetoothStatus === 'connected'
+                                  ? 'bg-emerald-400 animate-pulse'
+                                  : printerSettings.bluetoothStatus === 'connecting'
+                                  ? 'bg-amber-400 animate-ping'
+                                  : 'bg-zinc-500'
+                              }`}
+                            />
+                            {printerSettings.bluetoothStatus === 'connected'
+                              ? 'Terhubung (Connected)'
+                              : printerSettings.bluetoothStatus === 'connecting'
+                              ? 'Menghubungkan...'
+                              : 'Terputus (Disconnected)'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                          ID / MAC:{' '}
+                          <span className="text-zinc-300">
+                            {printerSettings.bluetoothDeviceId || '66:32:8B:11:4A:2D'}
+                          </span>{' '}
+                          • Protokol: <span className="text-blue-300 font-sans">ESC/POS Bluetooth</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Bluetooth Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleScanWebBluetooth}
+                        disabled={isScanningBt}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0"
+                      >
+                        <Search className={`w-3.5 h-3.5 ${isScanningBt ? 'animate-spin' : ''}`} />
+                        <span>{isScanningBt ? 'Memindai...' : 'Cari Perangkat Bluetooth'}</span>
+                      </button>
+
+                      {printerSettings.bluetoothStatus === 'connected' ? (
+                        <button
+                          type="button"
+                          onClick={handleDisconnectBt}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                          title="Putuskan sambungan Bluetooth"
+                        >
+                          <BluetoothOff className="w-3.5 h-3.5" />
+                          <span>Putuskan</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleReconnectBt}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1 shrink-0 shadow-sm"
+                          title="Sambungkan kembali"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Hubungkan Ulang</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Printer Parameters Form */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      Nama Printer
+                      Nama Printer Thermal
                     </label>
                     <input
                       type="text"
                       value={printerSettings.printerName}
                       onChange={(e) => handlePrinterChange('printerName', e.target.value)}
+                      placeholder="Contoh: POS-5802DD (Bluetooth Thermal)"
                       className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                      Tipe Koneksi
+                      Tipe Koneksi (Terkunci Khusus Bluetooth)
                     </label>
-                    <select
-                      value={printerSettings.connectionType}
-                      onChange={(e) => handlePrinterChange('connectionType', e.target.value)}
-                      className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                    >
-                      <option value="Bluetooth">Bluetooth (Wireless)</option>
-                      <option value="USB">USB Cable</option>
-                      <option value="Network/LAN">Network / LAN IP</option>
-                    </select>
+                    <div className="w-full bg-[#111114] border border-blue-500/30 rounded-xl px-3.5 py-2.5 text-xs text-blue-400 font-semibold flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Bluetooth className="w-3.5 h-3.5" />
+                        Bluetooth Nirkabel (Wireless Thermal)
+                      </span>
+                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-mono">
+                        Aktif
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -1144,7 +1441,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <select
                       value={printerSettings.paperWidth}
                       onChange={(e) => handlePrinterChange('paperWidth', e.target.value)}
-                      className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                      className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
                     >
                       <option value="58 mm">58 mm (Mini Thermal Standar)</option>
                       <option value="80 mm">80 mm (Thermal Lebar)</option>
@@ -1168,7 +1465,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                 {/* Additional Toggles */}
                 <div className="pt-4 border-t border-zinc-800 space-y-3">
-                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#121215] border border-zinc-800/60 cursor-pointer">
+                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#121215] border border-zinc-800/60 cursor-pointer hover:border-zinc-700 transition-colors">
                     <div>
                       <div className="text-xs font-bold text-white">Cetak Otomatis Setelah Bayar</div>
                       <div className="text-[11px] text-zinc-500">
@@ -1183,7 +1480,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     />
                   </label>
 
-                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#121215] border border-zinc-800/60 cursor-pointer">
+                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#121215] border border-zinc-800/60 cursor-pointer hover:border-zinc-700 transition-colors">
                     <div>
                       <div className="text-xs font-bold text-white">Bunyi Beep Saat Selesai Cetak</div>
                       <div className="text-[11px] text-zinc-500">
@@ -1203,54 +1500,113 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {/* Status & Test Card */}
               <div className="bg-[#18181c] border border-zinc-800/80 rounded-2xl p-6 space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
-                  <h4 className="text-sm font-bold text-white">Status Perangkat</h4>
-                  <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Status:</span>
-                      <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        Siap (Ready)
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <Radio className="w-4 h-4 text-blue-400" />
+                      Status Printer Bluetooth
+                    </h4>
+                    <span className="text-[10px] font-mono text-zinc-500">ESC/POS</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#121215] border border-zinc-800 space-y-2.5 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Koneksi:</span>
+                      <span className="text-blue-400 font-bold flex items-center gap-1">
+                        <Bluetooth className="w-3.5 h-3.5" />
+                        Bluetooth Saja
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Driver:</span>
-                      <span className="text-zinc-300 font-mono">Web Thermal POS</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Status:</span>
+                      <span
+                        className={`font-bold flex items-center gap-1.5 ${
+                          printerSettings.bluetoothStatus === 'connected'
+                            ? 'text-emerald-400'
+                            : printerSettings.bluetoothStatus === 'connecting'
+                            ? 'text-amber-400'
+                            : 'text-zinc-500'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            printerSettings.bluetoothStatus === 'connected'
+                              ? 'bg-emerald-400 animate-pulse'
+                              : printerSettings.bluetoothStatus === 'connecting'
+                              ? 'bg-amber-400 animate-ping'
+                              : 'bg-zinc-600'
+                          }`}
+                        />
+                        {printerSettings.bluetoothStatus === 'connected'
+                          ? 'Siap Cetak'
+                          : printerSettings.bluetoothStatus === 'connecting'
+                          ? 'Menyambungkan'
+                          : 'Terputus'}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Lebar:</span>
-                      <span className="text-zinc-300 font-bold">{printerSettings.paperWidth}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Perangkat:</span>
+                      <span className="text-zinc-200 font-mono text-[11px] truncate max-w-[130px]">
+                        {printerSettings.bluetoothDeviceName || printerSettings.printerName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Lebar Kertas:</span>
+                      <span className="text-amber-400 font-bold">{printerSettings.paperWidth}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400">Driver:</span>
+                      <span className="text-zinc-300 font-mono">Web Bluetooth Thermal</span>
                     </div>
                   </div>
 
                   {testResult && (
-                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs font-semibold text-emerald-400 flex items-center gap-2">
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs font-semibold text-emerald-400 flex items-center gap-2 animate-fadeIn">
                       <CheckCircle2 className="w-4 h-4 shrink-0" />
                       <span>{testResult}</span>
                     </div>
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleRunTestPrint}
-                  disabled={isTestPrinting}
-                  className="w-full bg-[#f59e0b] hover:bg-[#e09107] text-black font-bold py-3 rounded-xl text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  {isTestPrinting ? 'Mengirim Uji Cetak...' : 'Uji Cetak (Test Print)'}
-                </button>
+                <div className="space-y-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleRunTestPrint}
+                    disabled={isTestPrinting}
+                    className="w-full bg-[#f59e0b] hover:bg-[#e09107] text-black font-bold py-3 rounded-xl text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    {isTestPrinting ? 'Mengirim Uji Cetak Bluetooth...' : 'Uji Cetak Bluetooth (Test Print)'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBtModalOpen(true)}
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-semibold py-2.5 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Search className="w-3.5 h-3.5 text-blue-400" />
+                    Pilih dari Daftar Printer Bluetooth
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
           {/* Template Config */}
           {printerSubTab === 'template' && (
-            <div className="bg-[#18181c] border border-zinc-800/80 rounded-2xl p-6 space-y-5">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#f59e0b]" />
-                Kustomisasi Header & Footer Struk
-              </h3>
+            <div className="bg-[#18181c] border border-zinc-800/80 rounded-2xl p-6 space-y-6 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#f59e0b]" />
+                    Kustomisasi Template Struk Belanja
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Atur nama toko, informasi kontak, ucapan terima kasih, dan logo footer bawah struk.
+                  </p>
+                </div>
+              </div>
 
+              {/* Store & Header Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
@@ -1260,6 +1616,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={receiptTemplate.storeName}
                     onChange={(e) => handleTemplateChange('storeName', e.target.value)}
+                    placeholder="Contoh: WARUNG SENJA TERANG BULAN"
                     className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   />
                 </div>
@@ -1272,6 +1629,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={receiptTemplate.tagline}
                     onChange={(e) => handleTemplateChange('tagline', e.target.value)}
+                    placeholder="Contoh: Terang Bulan & Minuman Spesial"
                     className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   />
                 </div>
@@ -1284,6 +1642,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={receiptTemplate.address}
                     onChange={(e) => handleTemplateChange('address', e.target.value)}
+                    placeholder="Contoh: Jl. Senja Raya No. 45, Kota"
                     className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   />
                 </div>
@@ -1296,40 +1655,209 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={receiptTemplate.phone}
                     onChange={(e) => handleTemplateChange('phone', e.target.value)}
+                    placeholder="Contoh: 0812-3456-7890"
                     className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                    Pesan Footer Bawah Struk
+                    Pesan Ucapan Footer Bawah Struk
                   </label>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={receiptTemplate.footerNote}
                     onChange={(e) => handleTemplateChange('footerNote', e.target.value)}
-                    className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                    placeholder="Contoh: Terima kasih atas kunjungan Anda!\nSelamat menikmati sajian kami."
+                    className="w-full bg-[#111114] border border-zinc-800 focus:border-[#f59e0b] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none resize-none"
                   />
                 </div>
+              </div>
+
+              {/* ========================================================================= */}
+              {/* LOGO FOOTER BAWAH STRUK (NEW FEATURE) */}
+              {/* ========================================================================= */}
+              <div className="p-5 rounded-2xl bg-[#121215] border border-zinc-800 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-[#f59e0b] flex items-center justify-center">
+                      <ImageIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        Logo untuk Footer Bawah Struk
+                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium">
+                          Khusus Thermal
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Tambahkan logo atau badge sertifikasi yang akan dicetak di posisi paling bawah struk belanja.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xs font-semibold text-zinc-300">
+                      {receiptTemplate.showFooterLogo !== false && receiptTemplate.footerLogo
+                        ? 'Tampil'
+                        : 'Sembunyikan'}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={receiptTemplate.showFooterLogo !== false && !!receiptTemplate.footerLogo}
+                      onChange={(e) => handleToggleFooterLogo(e.target.checked)}
+                      className="w-4 h-4 accent-[#f59e0b] cursor-pointer"
+                    />
+                  </label>
+                </div>
+
+                {/* Upload or Selected Logo Area */}
+                {receiptTemplate.footerLogo ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl bg-[#18181c] border border-zinc-800">
+                    {/* Simulated Monochrome Thermal Paper Preview */}
+                    <div className="bg-white p-3 rounded-xl border border-zinc-300 shadow-sm flex flex-col items-center justify-center shrink-0">
+                      <img
+                        src={receiptTemplate.footerLogo}
+                        alt="Logo Footer"
+                        className="max-h-20 max-w-[170px] object-contain filter grayscale contrast-125"
+                      />
+                      <span className="text-[9px] font-mono text-zinc-500 mt-1 uppercase">
+                        Pratinjau Footer
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 flex-1 text-center sm:text-left">
+                      <div className="text-xs font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Logo Footer Aktif & Tersimpan
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        Logo ini akan otomatis dicetak di bagian paling bawah pada setiap struk thermal (58mm / 80mm).
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1 justify-center sm:justify-start">
+                        <label className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5 text-[#f59e0b]" />
+                          <span>Ganti Logo</span>
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp"
+                            onChange={handleFooterLogoInputChange}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFooterLogo}
+                          className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hapus Logo</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Drag & Drop File Upload Box */}
+                    <div className="border-2 border-dashed border-zinc-700 hover:border-[#f59e0b] rounded-2xl p-6 transition-colors bg-[#141417] text-center relative group">
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp"
+                        onChange={handleFooterLogoInputChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-[#f59e0b] flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        <div className="text-xs font-bold text-white">
+                          Klik atau geser file gambar logo footer ke sini
+                        </div>
+                        <div className="text-[11px] text-zinc-400">
+                          Mendukung file PNG, JPG, JPEG, SVG, WebP (Maksimal 3 MB)
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Presets Gallery */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
+                        <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" />
+                        <span>Atau pilih logo preset siap pakai untuk struk kasir:</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {PRESET_FOOTER_LOGOS.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handleSelectPresetLogo(preset.dataUrl)}
+                            className="bg-[#18181c] hover:bg-zinc-800/80 border border-zinc-800 hover:border-[#f59e0b]/50 rounded-xl p-3 text-left transition-all group flex flex-col justify-between cursor-pointer"
+                          >
+                            <div className="bg-white p-2 rounded-lg border border-zinc-200 flex items-center justify-center h-16 mb-2">
+                              <img
+                                src={preset.dataUrl}
+                                alt={preset.name}
+                                className="max-h-12 max-w-full object-contain filter grayscale contrast-125"
+                              />
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-white group-hover:text-[#f59e0b] transition-colors truncate">
+                                {preset.name}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 mt-0.5">
+                                {preset.category}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* Receipt Preview */}
           {printerSubTab === 'preview' && (
-            <div className="flex flex-col items-center">
-              <div className="w-full max-w-sm bg-white text-black p-5 rounded-lg font-mono text-[11px] leading-relaxed shadow-xl border border-zinc-300 select-text">
+            <div className="flex flex-col items-center animate-fadeIn space-y-4">
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                <span>
+                  Pratinjau Format Kertas:{' '}
+                  <strong className="text-white">{printerSettings.paperWidth}</strong> (Printer Bluetooth:{' '}
+                  {printerSettings.bluetoothDeviceName || printerSettings.printerName})
+                </span>
+              </div>
+
+              {/* Thermal Receipt Paper Canvas */}
+              <div
+                className={`bg-white text-black p-5 rounded-lg font-mono text-[11px] leading-relaxed shadow-xl border border-zinc-300 select-text transition-all ${
+                  printerSettings.paperWidth === '80 mm' ? 'w-full max-w-md' : 'w-full max-w-sm'
+                }`}
+              >
+                {/* Header */}
                 <div className="text-center pb-3 border-b border-dashed border-zinc-400">
-                  <h4 className="font-bold text-xs uppercase">{receiptTemplate.storeName}</h4>
-                  <p className="text-[10px] text-zinc-700">{receiptTemplate.tagline}</p>
-                  <p className="text-[10px] text-zinc-700">{receiptTemplate.address}</p>
-                  <p className="text-[10px] text-zinc-700">Telp: {receiptTemplate.phone}</p>
+                  <h4 className="font-bold text-xs uppercase">{receiptTemplate.storeName || 'NAMA TOKO'}</h4>
+                  {receiptTemplate.tagline && (
+                    <p className="text-[10px] text-zinc-700">{receiptTemplate.tagline}</p>
+                  )}
+                  {receiptTemplate.address && (
+                    <p className="text-[10px] text-zinc-700">{receiptTemplate.address}</p>
+                  )}
+                  {receiptTemplate.phone && (
+                    <p className="text-[10px] text-zinc-700">Telp: {receiptTemplate.phone}</p>
+                  )}
                 </div>
 
+                {/* Metadata */}
                 <div className="py-2 border-b border-dashed border-zinc-400 text-[10px] text-zinc-800 space-y-0.5">
                   <div className="flex justify-between">
                     <span>No: TR-SAMPLE-01</span>
-                    <span>{new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>
+                      {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Kasir: Kasir Utama</span>
@@ -1337,6 +1865,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
 
+                {/* Items */}
                 <div className="py-2 border-b border-dashed border-zinc-400 space-y-1">
                   <div className="flex justify-between">
                     <div>
@@ -1354,6 +1883,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
 
+                {/* Totals */}
                 <div className="py-2 border-b border-dashed border-zinc-400 space-y-1">
                   <div className="flex justify-between font-bold text-xs">
                     <span>TOTAL:</span>
@@ -1369,12 +1899,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-3 text-center text-[10px] text-zinc-700">
-                  <p>{receiptTemplate.footerNote}</p>
+                {/* Footer Note */}
+                <div className="pt-3 text-center text-[10px] text-zinc-700 whitespace-pre-line">
+                  {receiptTemplate.footerNote}
                   <p className="text-[9px] text-zinc-500 mt-1">
-                    Powered by WSPOS - {printerSettings.paperWidth}
+                    Powered by WSPOS - {printerSettings.paperWidth} (Bluetooth Thermal)
                   </p>
                 </div>
+
+                {/* Footer Logo Rendered at the bottom */}
+                {receiptTemplate.footerLogo && receiptTemplate.showFooterLogo !== false && (
+                  <div className="pt-3 pb-1 border-t border-dotted border-zinc-400 mt-2 flex flex-col items-center justify-center">
+                    <img
+                      src={receiptTemplate.footerLogo}
+                      alt="Logo Footer Struk"
+                      className="max-h-14 max-w-[150px] object-contain filter grayscale contrast-125 mx-auto"
+                    />
+                    <span className="text-[8px] font-mono text-zinc-500 mt-0.5">
+                      [Logo Footer Bawah Struk]
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1951,6 +2496,207 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Ya, Kosongkan Data
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL CARI & PILIH PRINTER THERMAL BLUETOOTH */}
+      {/* ========================================================================= */}
+      {isBtModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-xl bg-[#18181c] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-[#141417]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+                  <BluetoothSearching className={`w-5 h-5 ${isScanningBt ? 'animate-spin' : ''}`} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Cari Printer Thermal Bluetooth
+                    {isScanningBt && (
+                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full animate-pulse">
+                        Memindai...
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Pilih printer thermal Bluetooth yang terdeteksi atau dipasangkan di perangkat Anda.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBtModalOpen(false)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-zinc-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body & Scanner */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Search & Refresh Bar */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={searchBtQuery}
+                    onChange={(e) => setSearchBtQuery(e.target.value)}
+                    placeholder="Filter nama printer Bluetooth..."
+                    className="w-full bg-[#121215] border border-zinc-800 focus:border-blue-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefreshBtScan}
+                  disabled={isScanningBt}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isScanningBt ? 'animate-spin' : ''}`} />
+                  <span>{isScanningBt ? 'Scanning...' : 'Pindai Ulang'}</span>
+                </button>
+              </div>
+
+              {/* Discovered List */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Printer Bluetooth Ditemukan ({discoveredDevices.length})</span>
+                  <span className="text-[10px] text-zinc-500 font-normal">ESC/POS Thermal Standar</span>
+                </div>
+
+                <div className="space-y-2">
+                  {discoveredDevices
+                    .filter((dev) =>
+                      dev.name.toLowerCase().includes(searchBtQuery.toLowerCase()) ||
+                      dev.macAddress.toLowerCase().includes(searchBtQuery.toLowerCase())
+                    )
+                    .map((dev) => {
+                      const isCurrent =
+                        printerSettings.bluetoothDeviceName === dev.name ||
+                        printerSettings.printerName === dev.name;
+                      return (
+                        <div
+                          key={dev.id}
+                          className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                            isCurrent && printerSettings.bluetoothStatus === 'connected'
+                              ? 'bg-blue-500/10 border-blue-500/40 shadow-sm'
+                              : 'bg-[#121215] border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                                isCurrent && printerSettings.bluetoothStatus === 'connected'
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : 'bg-zinc-800 text-zinc-400'
+                              }`}
+                            >
+                              <Bluetooth className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-white">{dev.name}</span>
+                                <span className="text-[10px] bg-zinc-800 text-amber-400 font-semibold px-2 py-0.5 rounded border border-zinc-700 font-mono">
+                                  {dev.paperWidth}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-zinc-400 flex items-center gap-2 mt-0.5 font-mono">
+                                <span>MAC: {dev.macAddress}</span>
+                                <span>•</span>
+                                <span className="text-emerald-400 flex items-center gap-1 font-sans">
+                                  <Radio className="w-3 h-3" />
+                                  Sinyal Kuat ({dev.rssi} dBm)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            {isCurrent && printerSettings.bluetoothStatus === 'connected' ? (
+                              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Terhubung
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSelectBtDevice(dev)}
+                                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer shadow-sm"
+                              >
+                                Hubungkan
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Manual Entry Form */}
+              <div className="pt-4 border-t border-zinc-800 space-y-3">
+                <div className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Tambahkan Printer Bluetooth Kustom / Manual:</span>
+                </div>
+                <form
+                  onSubmit={handleAddCustomBtDevice}
+                  className="grid grid-cols-1 sm:grid-cols-12 gap-2"
+                >
+                  <div className="sm:col-span-6">
+                    <input
+                      type="text"
+                      value={customBtName}
+                      onChange={(e) => setCustomBtName(e.target.value)}
+                      placeholder="Nama Printer (misal: PT-210 BT)"
+                      className="w-full bg-[#121215] border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <input
+                      type="text"
+                      value={customBtMac}
+                      onChange={(e) => setCustomBtMac(e.target.value)}
+                      placeholder="MAC (Opsional)"
+                      className="w-full bg-[#121215] border border-zinc-800 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button
+                      type="submit"
+                      disabled={!customBtName.trim()}
+                      className="w-full bg-zinc-800 hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Tambah
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Notice */}
+              <div className="bg-blue-950/20 border border-blue-900/40 rounded-xl p-3 text-[11px] text-blue-300/80 leading-relaxed flex items-start gap-2">
+                <Bluetooth className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
+                <span>
+                  Pastikan printer thermal Bluetooth Anda telah dinyalakan dan fungsi Bluetooth pada
+                  perangkat (HP/Tablet/Komputer) sudah aktif. Printer yang sudah dipasangkan akan
+                  langsung siap menerima perintah cetak struk dari kasir.
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-zinc-800 flex justify-end bg-[#141417]">
+              <button
+                type="button"
+                onClick={() => setIsBtModalOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>

@@ -125,9 +125,22 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </div>
 
           {/* Footer Note */}
-          <div className="pt-3 text-center text-[10px] text-zinc-700 whitespace-pre-line">
-            {template.footerNote}
-          </div>
+          {template.footerNote && (
+            <div className="pt-3 text-center text-[10px] text-zinc-700 whitespace-pre-line">
+              {template.footerNote}
+            </div>
+          )}
+
+          {/* Logo Footer Bawah Struk */}
+          {template.footerLogo && template.showFooterLogo !== false && (
+            <div className="pt-3 pb-1 flex flex-col items-center justify-center border-t border-dotted border-zinc-300 mt-2">
+              <img
+                src={template.footerLogo}
+                alt="Logo Footer Struk"
+                className="max-h-16 max-w-[160px] object-contain filter grayscale contrast-125 mx-auto"
+              />
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
